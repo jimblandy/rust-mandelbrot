@@ -2,6 +2,7 @@
 name = "mandelbrot"
 version = "0.1.0"
 dependencies = [
+ "crossbeam 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.3.14 (registry+https://github.com/rust-lang/crates.io-index)",
  "num 0.1.27 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
@@ -28,6 +29,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "color_quant"
 version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "crossbeam"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
