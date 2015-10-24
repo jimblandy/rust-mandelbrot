@@ -1,14 +1,7 @@
 #![allow(dead_code, unused_variables)]
 
-extern crate crossbeam;
-extern crate image;
-extern crate num;
+extern crate bench;
 
-use image::ColorType;
-use image::png::PNGEncoder;
-use num::Complex;
-use std::fs::File;
-use std::io::Write;
 use std::str::FromStr;
 
 /// Parse the string `s` as a coordinate pair, like `"400x600"` or `"1.0,0.5"`.
@@ -33,25 +26,13 @@ fn parse_pair<T: FromStr>(s: &str, separator: char) -> Option<(T, T)> {
 
 #[test]
 fn test_parse_pair() {
-    assert_eq!(parse_pair::<i32>("", ','), None);
-    assert_eq!(parse_pair::<i32>("10,", ','), None);
-    assert_eq!(parse_pair::<i32>(",10", ','), None);
-    assert_eq!(parse_pair::<i32>("10,20", ','), Some((10, 20)));
+    assert_eq!(parse_pair::<i32>("",        ','), None);
+    assert_eq!(parse_pair::<i32>("10,",     ','), None);
+    assert_eq!(parse_pair::<i32>(",10",     ','), None);
+    assert_eq!(parse_pair::<i32>("10,20",   ','), Some((10, 20)));
     assert_eq!(parse_pair::<i32>("10,20xy", ','), None);
-    assert_eq!(parse_pair::<f64>("0.5x", 'x'), None);
+    assert_eq!(parse_pair::<f64>("0.5x",    'x'), None);
     assert_eq!(parse_pair::<f64>("0.5x1.5", 'x'), Some((0.5, 1.5)));
-}
-
-fn count_escape(c: Complex<f64>, limit: usize) -> Option<usize> {
-    let mut z = Complex { re: 0.0, im: 0.0 };
-    for i in 0..limit {
-        z = z*z + c;
-        if z.norm_sqr() > 4.0 {
-            return Some(i);
-        }
-    }
-
-    return None;
 }
 
 /// Return the point on the complex plane corresponding to a given pixel in the
@@ -82,6 +63,33 @@ fn test_pixel_to_point() {
                (-0.5, -0.5));
 }
 
+extern crate num;
+use num::Complex;
+
+/// Try to determine whether the complex number `c` is in the Mandelbrot set.
+///
+/// A number `c` is in the set if, starting with zero, repeatedly squaring and
+/// adding `c` never causes the number to leave the circle of radius 2 centered
+/// on the origin; the number instead orbits near the origin forever. (If the
+/// number does leave the circle, it eventually flies away to infinity.)
+///
+/// If after `limit` iterations our number has still not left the circle, return
+/// `None`; this is as close as we come to knowing that `c` is in the set.
+///
+/// If the number does leave the circle before we give up, return `Some(i)`, where
+/// `i` is the number of iterations it took.
+fn escapes(c: Complex<f64>, limit: u32) -> Option<u32> {
+    let mut z = Complex { re: 0.0, im: 0.0 };
+    for i in 0..limit {
+        z = z*z + c;
+        if z.norm_sqr() > 4.0 {
+            return Some(i);
+        }
+    }
+
+    return None;
+}
+
 /// Render a rectangle of the Mandelbrot set into a buffer of pixels.
 ///
 /// The `bounds` argument gives the width and height of the buffer `pixels`,
@@ -100,13 +108,41 @@ fn render(pixels: &mut [u8],
             let point = pixel_to_point(bounds, (c, r),
                                        upper_left, lower_right);
             pixels[r * bounds.0 + c] =
-                match count_escape(Complex { re: point.0, im: point.1 }, 255) {
+                match escapes(Complex { re: point.0, im: point.1 }, 255) {
                     None => 0,
                     Some(count) => 255 - count as u8
                 };
         }
     }
 }
+
+
+extern crate image;
+
+use std::fs::File;
+use std::io::Result;
+use image::png::PNGEncoder;
+use image::ColorType;
+
+/// Write the buffer `pixels`, whose dimensions are given by `bounds`, to the
+/// file named `filename`.
+fn write_bitmap(filename: &str, pixels: &[u8], bounds: (usize, usize))
+    -> Result<()>
+{
+    let output = try!(File::create(filename));
+
+    let encoder = PNGEncoder::new(output);
+    try!(encoder.encode(&pixels[..],
+                        bounds.0 as u32, bounds.1 as u32,
+                        ColorType::Gray(8)));
+
+    Ok(())
+}
+
+
+extern crate crossbeam;
+
+use std::io::Write;
 
 fn main() {
     let args : Vec<String> = std::env::args().collect();
@@ -122,42 +158,44 @@ fn main() {
         std::process::exit(1);
     }
 
-    let bounds = parse_pair::<usize>(&args[2], 'x')
+    let bounds = parse_pair(&args[2], 'x')
         .expect("error parsing image dimensions");
-    let upper_left = parse_pair::<f64>(&args[3], ',')
+    let upper_left = parse_pair(&args[3], ',')
         .expect("error parsing upper left corner point");
-    let lower_right = parse_pair::<f64>(&args[4], ',')
+    let lower_right = parse_pair(&args[4], ',')
         .expect("error parsing lower right corner point");
 
-    let output = File::create(&args[1])
-        .expect("error opening output file");
-
     let mut pixels = vec![0; bounds.0 * bounds.1];
+    let area = bounds.0 as f64 * bounds.1 as f64;
 
-    let threads = 8;
-    let shard_rows = bounds.1 / threads + 1;
+    for threads in [1,  2,  3,  4,  5,  6,  7,  8,
+                    9, 10, 11, 12, 13, 14, 15, 16,
+                    20, 30, 40, 50, 60, 70, 80, 90,
+                    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000].iter() {
+        let band_rows = bounds.1 / threads;
 
-    if true {
-        let shards : Vec<_> = pixels.chunks_mut(shard_rows * bounds.0).collect();
-        crossbeam::scope(|scope| {
-            for (i, shard) in shards.into_iter().enumerate() {
-                let top = shard_rows * i;
-                let height = shard.len() / bounds.0;
-                let shard_bounds = (bounds.0, height);
-                scope.spawn(move || {
-                    render(shard, shard_bounds,
-                           pixel_to_point(bounds, (0, top), upper_left, lower_right),
-                           pixel_to_point(bounds, (bounds.0, top + height), upper_left, lower_right));
-                });
-            }
+        let mut median : bench::Median = bench::bench(|| {
+            let bands : Vec<_> = pixels.chunks_mut(band_rows * bounds.0).collect();
+            crossbeam::scope(|scope| {
+                for (i, band) in bands.into_iter().enumerate() {
+                    let top = band_rows * i;
+                    let height = band.len() / bounds.0;
+                    let band_bounds = (bounds.0, height);
+                    let band_upper_left = pixel_to_point(bounds, (0, top),
+                                                         upper_left, lower_right);
+                    let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height),
+                                                          upper_left, lower_right);
+
+                    scope.spawn(move || {
+                        render(band, band_bounds, band_upper_left, band_lower_right);
+                    });
+                }
+            });
         });
-    } else {
-        render(&mut pixels[..], bounds, upper_left, lower_right);
-    }
+        println!("{} {}",
+                 threads,
+                 area / (median.median() / 1_000_000.0));
 
-    let encoder = PNGEncoder::new(output);
-    encoder.encode(&pixels[..],
-                   bounds.0 as u32, bounds.1 as u32,
-                   ColorType::Gray(8))
-        .expect("error writing PNG file");
+        write_bitmap(&args[1], &pixels[..], bounds).expect("error writing PNG file");
+    }
 }
