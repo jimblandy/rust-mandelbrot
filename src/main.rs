@@ -168,9 +168,9 @@ fn main() {
     for threads in [1,  2,  3,  4,  5,  6,  7,  8,
                     9, 10, 11, 12, 13, 14, 15, 16,
                     20, 30, 40, 50, 60, 70, 80, 90,
-                    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
+                    //100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
                     ].iter() {
-        let band_rows = bounds.1 / 60;
+        let band_rows = bounds.1 / 400;
 
         let mut median : bench::Median = bench::bench(|| {
             let bands = Mutex::new(pixels.chunks_mut(band_rows * bounds.0).enumerate());
