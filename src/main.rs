@@ -96,10 +96,8 @@ fn escapes(c: Complex<f64>, limit: u32) -> Option<u32> {
 /// which holds one grayscale pixel per byte. The `upper_left` and `lower_right`
 /// arguments specify points on the complex plane corresponding to the upper
 /// left and lower right corners of the pixel buffer.
-fn render(pixels: &mut [u8],
-          bounds: (usize, usize),
-          upper_left: (f64, f64),
-          lower_right: (f64, f64))
+fn render(pixels: &mut [u8], bounds: (usize, usize),
+          upper_left: (f64, f64), lower_right: (f64, f64))
 {
     assert!(pixels.len() == bounds.0 * bounds.1);
 
@@ -115,7 +113,6 @@ fn render(pixels: &mut [u8],
         }
     }
 }
-
 
 extern crate image;
 
@@ -139,10 +136,10 @@ fn write_bitmap(filename: &str, pixels: &[u8], bounds: (usize, usize))
     Ok(())
 }
 
-
 extern crate crossbeam;
 
 use std::io::Write;
+use std::sync::Mutex;
 
 fn main() {
     let args : Vec<String> = std::env::args().collect();
@@ -171,23 +168,36 @@ fn main() {
     for threads in [1,  2,  3,  4,  5,  6,  7,  8,
                     9, 10, 11, 12, 13, 14, 15, 16,
                     20, 30, 40, 50, 60, 70, 80, 90,
-                    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000].iter() {
-        let band_rows = bounds.1 / threads;
+                    100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
+                    ].iter() {
+        let band_rows = bounds.1 / 60;
 
         let mut median : bench::Median = bench::bench(|| {
-            let bands : Vec<_> = pixels.chunks_mut(band_rows * bounds.0).collect();
+            let bands = Mutex::new(pixels.chunks_mut(band_rows * bounds.0).enumerate());
             crossbeam::scope(|scope| {
-                for (i, band) in bands.into_iter().enumerate() {
-                    let top = band_rows * i;
-                    let height = band.len() / bounds.0;
-                    let band_bounds = (bounds.0, height);
-                    let band_upper_left = pixel_to_point(bounds, (0, top),
-                                                         upper_left, lower_right);
-                    let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height),
-                                                          upper_left, lower_right);
-
-                    scope.spawn(move || {
-                        render(band, band_bounds, band_upper_left, band_lower_right);
+                for i in 0..*threads {
+                    scope.spawn(|| {
+                        let mut count = 0;
+                        loop {
+                            match {
+                                let mut guard = bands.lock().unwrap();
+                                guard.next()
+                            }
+                            {
+                                None => { return; }
+                                Some((i, band)) => {
+                                    count += 1;
+                                    let top = band_rows * i;
+                                    let height = band.len() / bounds.0;
+                                    let band_bounds = (bounds.0, height);
+                                    let band_upper_left = pixel_to_point(bounds, (0, top),
+                                                                         upper_left, lower_right);
+                                    let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height),
+                                                                          upper_left, lower_right);
+                                    render(band, band_bounds, band_upper_left, band_lower_right);
+                                }
+                            }
+                        }
                     });
                 }
             });
@@ -195,7 +205,7 @@ fn main() {
         println!("{} {}",
                  threads,
                  area / (median.median() / 1_000_000.0));
-
-        write_bitmap(&args[1], &pixels[..], bounds).expect("error writing PNG file");
     }
+
+    write_bitmap(&args[1], &pixels[..], bounds).expect("error writing PNG file");
 }
