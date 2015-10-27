@@ -8,3 +8,4 @@ crossbeam = "0.1.5"
 num = "0.1.27"
 image = "0.3.14"
 bench = { git = "file:///home/jimb/rust/bench" }
+atomic_chunks_mut = { git = "file:///home/jimb/rust/atomic_chunks_mut" }

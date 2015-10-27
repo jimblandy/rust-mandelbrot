@@ -2,6 +2,7 @@
 name = "mandelbrot"
 version = "0.1.0"
 dependencies = [
+ "atomic_chunks_mut 0.1.0 (git+file:///home/jimb/rust/atomic_chunks_mut)",
  "bench 0.1.0 (git+file:///home/jimb/rust/bench)",
  "crossbeam 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "image 0.3.15 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -15,6 +16,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "winapi 0.2.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "atomic_chunks_mut"
+version = "0.1.0"
+source = "git+file:///home/jimb/rust/atomic_chunks_mut#d60a53327a0db73680b6b6d4879b8276dcfc8b21"
+dependencies = [
+ "crossbeam 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -137,9 +137,11 @@ fn write_bitmap(filename: &str, pixels: &[u8], bounds: (usize, usize))
 }
 
 extern crate crossbeam;
+extern crate atomic_chunks_mut;
+
+use atomic_chunks_mut::AtomicChunksMut;
 
 use std::io::Write;
-use std::sync::Mutex;
 
 fn main() {
     let args : Vec<String> = std::env::args().collect();
@@ -165,46 +167,26 @@ fn main() {
     let mut pixels = vec![0; bounds.0 * bounds.1];
     let area = bounds.0 as f64 * bounds.1 as f64;
 
-    for threads in [1,  2,  3,  4,  5,  6,  7,  8,
-                    9, 10, 11, 12, 13, 14, 15, 16,
-                    20, 30, 40, 50, 60, 70, 80, 90,
-                    //100, 200, 300, 400, 500, 600, 700, 800, 900, 1000
-                    ].iter() {
-        let band_rows = bounds.1 / 400;
-
-        let mut median : bench::Median = bench::bench(|| {
-            let bands = Mutex::new(pixels.chunks_mut(band_rows * bounds.0).enumerate());
-            crossbeam::scope(|scope| {
-                for i in 0..*threads {
-                    scope.spawn(|| {
-                        let mut count = 0;
-                        loop {
-                            match {
-                                let mut guard = bands.lock().unwrap();
-                                guard.next()
-                            }
-                            {
-                                None => { return; }
-                                Some((i, band)) => {
-                                    count += 1;
-                                    let top = band_rows * i;
-                                    let height = band.len() / bounds.0;
-                                    let band_bounds = (bounds.0, height);
-                                    let band_upper_left = pixel_to_point(bounds, (0, top),
-                                                                         upper_left, lower_right);
-                                    let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height),
-                                                                          upper_left, lower_right);
-                                    render(band, band_bounds, band_upper_left, band_lower_right);
-                                }
-                            }
-                        }
-                    });
-                }
-            });
+    {
+        let bands = AtomicChunksMut::new(&mut pixels, bounds.0);
+        crossbeam::scope(|scope| {
+            for i in 0..8 {
+                scope.spawn(|| {
+                    let mut count = 0;
+                    for (i, band) in &bands {
+                        count += 1;
+                        let top = i;
+                        let height = band.len() / bounds.0;
+                        let band_bounds = (bounds.0, height);
+                        let band_upper_left = pixel_to_point(bounds, (0, top),
+                                                             upper_left, lower_right);
+                        let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height),
+                                                              upper_left, lower_right);
+                        render(band, band_bounds, band_upper_left, band_lower_right);
+                    }
+                });
+            }
         });
-        println!("{} {}",
-                 threads,
-                 area / (median.median() / 1_000_000.0));
     }
 
     write_bitmap(&args[1], &pixels[..], bounds).expect("error writing PNG file");
