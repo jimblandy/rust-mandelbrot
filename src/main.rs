@@ -66,20 +66,8 @@ fn test_pixel_to_point() {
 extern crate num;
 use num::Complex;
 
-/// Try to determine whether the complex number `c` is in the Mandelbrot set.
-///
-/// A number `c` is in the set if, starting with zero, repeatedly squaring and
-/// adding `c` never causes the number to leave the circle of radius 2 centered
-/// on the origin; the number instead orbits near the origin forever. (If the
-/// number does leave the circle, it eventually flies away to infinity.)
-///
-/// If after `limit` iterations our number has still not left the circle, return
-/// `None`; this is as close as we come to knowing that `c` is in the set.
-///
-/// If the number does leave the circle before we give up, return `Some(i)`, where
-/// `i` is the number of iterations it took.
-fn escapes(c: Complex<f64>, limit: u32) -> Option<u32> {
-    let mut z = Complex { re: 0.0, im: 0.0 };
+/// 
+fn escapes(mut z: Complex<f64>, c: Complex<f64>, limit: u32) -> Option<u32> {
     for i in 0..limit {
         z = z*z + c;
         if z.norm_sqr() > 4.0 {
@@ -96,7 +84,8 @@ fn escapes(c: Complex<f64>, limit: u32) -> Option<u32> {
 /// which holds one grayscale pixel per byte. The `upper_left` and `lower_right`
 /// arguments specify points on the complex plane corresponding to the upper
 /// left and lower right corners of the pixel buffer.
-fn render(pixels: &mut [u8], bounds: (usize, usize),
+fn render(param: Complex<f64>,
+          pixels: &mut [u8], bounds: (usize, usize),
           upper_left: (f64, f64), lower_right: (f64, f64))
 {
     assert!(pixels.len() == bounds.0 * bounds.1);
@@ -106,7 +95,7 @@ fn render(pixels: &mut [u8], bounds: (usize, usize),
             let point = pixel_to_point(bounds, (c, r),
                                        upper_left, lower_right);
             pixels[r * bounds.0 + c] =
-                match escapes(Complex { re: point.0, im: point.1 }, 255) {
+                match escapes(Complex { re: point.0, im: point.1 }, param, 255) {
                     None => 0,
                     Some(count) => 255 - count as u8
                 };
@@ -146,12 +135,12 @@ use std::io::Write;
 fn main() {
     let args : Vec<String> = std::env::args().collect();
 
-    if args.len() != 5 {
+    if args.len() != 6 {
         writeln!(std::io::stderr(),
-                 "Usage: mandelbrot FILE PIXELS UPPERLEFT LOWERRIGHT")
+                 "Usage: mandelbrot FILE PIXELS UPPERLEFT LOWERRIGHT C")
             .unwrap();
         writeln!(std::io::stderr(),
-                 "Example: {} mandel.png 1000x750 -1.20,0.35 -1,0.20",
+                 "Example: {} mandel.png 1000x750 -1.20,0.35 -1,0.20 -0.727,0.189",
                  args[0])
             .unwrap();
         std::process::exit(1);
@@ -163,6 +152,8 @@ fn main() {
         .expect("error parsing upper left corner point");
     let lower_right = parse_pair(&args[4], ',')
         .expect("error parsing lower right corner point");
+    let c = parse_pair(&args[5], ',')
+        .expect("error parsing parameter c");
 
     let mut pixels = vec![0; bounds.0 * bounds.1];
     let area = bounds.0 as f64 * bounds.1 as f64;
@@ -182,7 +173,8 @@ fn main() {
                                                              upper_left, lower_right);
                         let band_lower_right = pixel_to_point(bounds, (bounds.0, top + height),
                                                               upper_left, lower_right);
-                        render(band, band_bounds, band_upper_left, band_lower_right);
+                        render(Complex { re: c.0, im: c.1 },
+                               band, band_bounds, band_upper_left, band_lower_right);
                     }
                 });
             }
