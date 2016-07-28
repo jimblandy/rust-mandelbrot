@@ -1,11 +1,13 @@
 [package]
 name = "mandelbrot"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Jim Blandy <jimb@red-bean.com>"]
 
 [dependencies]
-crossbeam = "0.1.5"
-num = "0.1.27"
-image = "0.3.14"
-bench = { git = "file:///home/jimb/rust/bench" }
-atomic_chunks_mut = { git = "file:///home/jimb/rust/atomic_chunks_mut" }
+crossbeam = "0.2.9"
+num = "0.1.34"
+image = "0.10.1"
+
+[dependencies.atomic_chunks_mut]
+git = "https://github.com/jimblandy/atomic-chunks-mut.git"
+rev = "6d43a652f5c4df3a191c9d29e9f5d60cc677c470"

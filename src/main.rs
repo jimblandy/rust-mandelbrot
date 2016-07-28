@@ -1,7 +1,5 @@
 #![allow(dead_code, unused_variables)]
 
-extern crate bench;
-
 use std::str::FromStr;
 
 /// Parse the string `s` as a coordinate pair, like `"400x600"` or `"1.0,0.5"`.
